@@ -411,7 +411,11 @@ window.addEventListener("keydown", e => {
 
   const kc = CODE_MAP[e.code];
   if (!kc) {
-    comboLabel.textContent = "Unmapped key: " + e.code;
+    current = null;
+    resultEl.hidden = false;
+    comboLabel.textContent = "Unmapped key: " + (e.code || e.key);
+    codeOut.textContent = "—";
+    aliasLine.hidden = true;
     return;
   }
   // Merge DOM modifier flags with tracked sides (covers keys held before focus).
