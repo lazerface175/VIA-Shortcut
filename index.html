@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIA Keycode Finder</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1d26;
+    --border: #2a2f3e;
+    --text: #e8eaf0;
+    --dim: #9aa0b4;
+    --accent: #6ea8fe;
+    --accent-dim: #2d4a77;
+    --green: #4ade80;
+    --code-bg: #11141b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  main { width: 100%; max-width: 720px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 14px; margin-bottom: 24px; }
+  .sub a { color: var(--accent); }
+
+  .capture {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    user-select: none;
+    outline: none;
+  }
+  .capture:focus, .capture.armed { border-color: var(--accent); background: rgba(110,168,254,.06); }
+  .capture .hint { font-size: 16px; color: var(--dim); }
+  .capture .hint b { color: var(--text); font-weight: 600; }
+  .capture .live-mods { margin-top: 14px; min-height: 30px; }
+  .mod-pill {
+    display: inline-block;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 12px;
+    margin: 0 4px;
+    font-size: 14px;
+    color: var(--dim);
+    background: var(--panel);
+  }
+  .mod-pill.on { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+
+  .result {
+    margin-top: 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .result .combo { color: var(--dim); font-size: 13px; margin-bottom: 8px; }
+  .code-row { display: flex; gap: 8px; align-items: stretch; }
+  .code {
+    flex: 1;
+    font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-size: 20px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--green);
+    word-break: break-all;
+    display: flex;
+    align-items: center;
+  }
+  button {
+    background: var(--accent);
+    color: #0b1220;
+    border: none;
+    border-radius: 8px;
+    padding: 0 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  button.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; }
+  .alias { margin-top: 10px; font-size: 13px; color: var(--dim); }
+  .alias code { color: var(--green); font-family: "Cascadia Code", Consolas, monospace; }
+
+  .toolbar { display: flex; gap: 16px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .toolbar label { font-size: 13px; color: var(--dim); display: flex; gap: 6px; align-items: center; }
+
+  .manual {
+    margin-top: 28px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .manual h2 { font-size: 15px; margin: 0 0 4px; }
+  .manual p { font-size: 13px; color: var(--dim); margin: 0 0 14px; }
+  .manual-mods { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .manual-mods .mod-pill { cursor: pointer; }
+  .manual-row { display: flex; gap: 8px; }
+  select {
+    flex: 1;
+    background: var(--code-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .history { margin-top: 28px; }
+  .history h2 { font-size: 15px; margin: 0 0 10px; }
+  .history ul { list-style: none; margin: 0; padding: 0; }
+  .history li {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 6px;
+  }
+  .history .h-combo { color: var(--dim); font-size: 13px; width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history .h-code { flex: 1; font-family: Consolas, monospace; font-size: 14px; color: var(--green); overflow: hidden; text-overflow: ellipsis; }
+  .note { font-size: 12px; color: var(--dim); margin-top: 20px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>VIA Keycode Finder</h1>
+  <div class="sub">Press a key combination → get the QMK string for <a href="https://usevia.app" target="_blank" rel="noopener">usevia.app</a> → <b>Special &gt; Any</b></div>
+
+  <div id="capture" class="capture" tabindex="0">
+    <div class="hint" id="hint"><b>Click here</b>, then press your key combination</div>
+    <div class="live-mods" id="liveMods"></div>
+  </div>
+
+  <div class="result" id="result" hidden>
+    <div class="combo" id="comboLabel"></div>
+    <div class="code-row">
+      <div class="code" id="codeOut"></div>
+      <button id="copyBtn">Copy</button>
+    </div>
+    <div class="alias" id="aliasLine" hidden></div>
+    <div class="toolbar">
+      <label><input type="checkbox" id="sidedMods"> Distinguish left/right modifiers (LCTL, RSFT…)</label>
+      <label><input type="checkbox" id="fullNames"> Full modifier names (LCTL instead of C)</label>
+    </div>
+  </div>
+
+  <div class="manual">
+    <h2>OS-reserved shortcut? Pick it manually</h2>
+    <p>Some combos (Win+D, Ctrl+Alt+Del, Cmd+Space) are intercepted by the OS before the browser sees them. Toggle modifiers and pick the key instead.</p>
+    <div class="manual-mods" id="manualMods"></div>
+    <div class="manual-row">
+      <select id="keySelect"></select>
+      <button id="manualGo">Generate</button>
+    </div>
+  </div>
+
+  <div class="history" id="historyWrap" hidden>
+    <h2>History</h2>
+    <ul id="historyList"></ul>
+  </div>
+
+  <div class="note">
+    GUI = Windows key / Cmd on macOS · Alt = Option on macOS.<br>
+    On Windows, AltGr registers as Ctrl+Alt — that is the same chord QMK sees.<br>
+    Paste the generated string into VIA: select a key → <b>Special → Any</b> → enter the code → Confirm.
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ---------- e.code -> QMK keycode ---------- */
+const CODE_MAP = {
+  // Letters & digits
+  ...Object.fromEntries("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(c => ["Key"+c, "KC_"+c])),
+  Digit1:"KC_1",Digit2:"KC_2",Digit3:"KC_3",Digit4:"KC_4",Digit5:"KC_5",
+  Digit6:"KC_6",Digit7:"KC_7",Digit8:"KC_8",Digit9:"KC_9",Digit0:"KC_0",
+  // Function keys
+  ...Object.fromEntries(Array.from({length:24},(_,i)=>["F"+(i+1),"KC_F"+(i+1)])),
+  // Editing / navigation
+  Enter:"KC_ENT", Escape:"KC_ESC", Backspace:"KC_BSPC", Tab:"KC_TAB", Space:"KC_SPC",
+  Delete:"KC_DEL", Insert:"KC_INS", Home:"KC_HOME", End:"KC_END",
+  PageUp:"KC_PGUP", PageDown:"KC_PGDN",
+  ArrowUp:"KC_UP", ArrowDown:"KC_DOWN", ArrowLeft:"KC_LEFT", ArrowRight:"KC_RIGHT",
+  CapsLock:"KC_CAPS", PrintScreen:"KC_PSCR", ScrollLock:"KC_SCRL", Pause:"KC_PAUS",
+  // Punctuation (US positions)
+  Minus:"KC_MINS", Equal:"KC_EQL", BracketLeft:"KC_LBRC", BracketRight:"KC_RBRC",
+  Backslash:"KC_BSLS", Semicolon:"KC_SCLN", Quote:"KC_QUOT", Backquote:"KC_GRV",
+  Comma:"KC_COMM", Period:"KC_DOT", Slash:"KC_SLSH",
+  // Numpad
+  NumLock:"KC_NUM",
+  Numpad0:"KC_KP_0",Numpad1:"KC_KP_1",Numpad2:"KC_KP_2",Numpad3:"KC_KP_3",Numpad4:"KC_KP_4",
+  Numpad5:"KC_KP_5",Numpad6:"KC_KP_6",Numpad7:"KC_KP_7",Numpad8:"KC_KP_8",Numpad9:"KC_KP_9",
+  NumpadAdd:"KC_KP_PLUS", NumpadSubtract:"KC_KP_MINUS", NumpadMultiply:"KC_KP_ASTERISK",
+  NumpadDivide:"KC_KP_SLASH", NumpadDecimal:"KC_KP_DOT", NumpadEnter:"KC_KP_ENTER",
+  NumpadComma:"KC_KP_COMMA", NumpadEqual:"KC_KP_EQUAL",
+  // Media / system (codes Chrome reports on most platforms)
+  AudioVolumeUp:"KC_VOLU", VolumeUp:"KC_VOLU",
+  AudioVolumeDown:"KC_VOLD", VolumeDown:"KC_VOLD",
+  AudioVolumeMute:"KC_MUTE", VolumeMute:"KC_MUTE",
+  MediaPlayPause:"KC_MPLY", MediaStop:"KC_MSTP",
+  MediaTrackNext:"KC_MNXT", MediaTrackPrevious:"KC_MPRV",
+  BrowserBack:"KC_WBAK", BrowserForward:"KC_WFWD", BrowserRefresh:"KC_WREF",
+  BrowserHome:"KC_WHOM", BrowserSearch:"KC_WSCH", BrowserFavorites:"KC_WFAV",
+  LaunchMail:"KC_MAIL", LaunchApp1:"KC_MSEL", LaunchApp2:"KC_CALC",
+  Power:"KC_PWR", Sleep:"KC_SLEP", WakeUp:"KC_WAKE",
+  // International / extra
+  IntlBackslash:"KC_NUBS", IntlRo:"KC_INT1", IntlYen:"KC_INT3",
+  Convert:"KC_INT4", NonConvert:"KC_INT5", KanaMode:"KC_KANA",
+  Lang1:"KC_HAEN", Lang2:"KC_HANJ", Lang3:"KC_HENK", Lang4:"KC_MHEN",
+};
+
+const MOD_CODES = {
+  ControlLeft:"ctrlL", ControlRight:"ctrlR",
+  ShiftLeft:"shiftL", ShiftRight:"shiftR",
+  AltLeft:"altL", AltRight:"altR",
+  MetaLeft:"guiL", MetaRight:"guiR",
+  OSLeft:"guiL", OSRight:"guiR",
+};
+const MOD_LABEL = {ctrl:"Ctrl", shift:"Shift", alt:"Alt", gui:"GUI"};
+
+/* Compound QMK aliases for common combos (order-insensitive). */
+const ALIASES = [
+  {mods:["ctrl","alt"],          name:"LCA"},
+  {mods:["shift","alt"],         name:"LSA"},
+  {mods:["ctrl","shift"],        name:"LCS"},
+  {mods:["ctrl","gui"],          name:"LCG"},
+  {mods:["alt","gui"],           name:"LAG"},
+  {mods:["shift","gui"],         name:"SGUI"},  // SCMD on macOS
+  {mods:["ctrl","alt","gui"],    name:"LCAG"},
+  {mods:["ctrl","shift","alt"],  name:"MEH"},
+  {mods:["ctrl","shift","alt","gui"], name:"HYPR"},
+];
+
+/* ---------- DOM ---------- */
+const captureEl   = document.getElementById("capture");
+const hintEl      = document.getElementById("hint");
+const liveModsEl  = document.getElementById("liveMods");
+const resultEl    = document.getElementById("result");
+const comboLabel  = document.getElementById("comboLabel");
+const codeOut     = document.getElementById("codeOut");
+const aliasLine   = document.getElementById("aliasLine");
+const copyBtn     = document.getElementById("copyBtn");
+const sidedChk    = document.getElementById("sidedMods");
+const fullNamesChk= document.getElementById("fullNames");
+const historyWrap = document.getElementById("historyWrap");
+const historyList = document.getElementById("historyList");
+const manualModsEl= document.getElementById("manualMods");
+const keySelect   = document.getElementById("keySelect");
+const manualGo    = document.getElementById("manualGo");
+
+/* ---------- state ---------- */
+// Which modifier sides are physically held, tracked from real key events.
+const held = {ctrlL:false,ctrlR:false,shiftL:false,shiftR:false,altL:false,altR:false,guiL:false,guiR:false};
+const manual = {ctrl:false,shift:false,alt:false,gui:false};
+let armed = false;
+let current = null; // {kc, mods:{ctrl,shift,alt,gui}, sided:{ctrlL...}, human}
+let history = [];
+
+/* ---------- helpers ---------- */
+function activeMods() {
+  return {
+    ctrl:  held.ctrlL  || held.ctrlR,
+    shift: held.shiftL || held.shiftR,
+    alt:   held.altL   || held.altR,
+    gui:   held.guiL   || held.guiR,
+  };
+}
+
+function modWrapName(mod, sided, fullNames, side) {
+  // mod: 'ctrl'|'shift'|'alt'|'gui'; side: 'L'|'R'|null
+  const short = {ctrl:"C", shift:"S", alt:"A", gui:"G"}[mod];
+  const full  = {ctrl:"CTL", shift:"SFT", alt:"ALT", gui:"GUI"}[mod];
+  if (sided && side) return side + full;          // LCTL, RSFT, ...
+  return fullNames ? "L"+full : short;            // LCTL vs C
+}
+
+// Build the nested QMK chord string.
+// Order: outermost -> innermost: Ctrl, Shift, Alt, GUI (matches C(S(A(G(kc))) = HYPR).
+function buildChord(kc, mods, sided, sidedState, fullNames) {
+  const order = ["ctrl","shift","alt","gui"];
+  let out = kc;
+  for (let i = order.length - 1; i >= 0; i--) {
+    const m = order[i];
+    if (!mods[m]) continue;
+    let side = null;
+    if (sided && sidedState) {
+      if (sidedState[m+"L"] && sidedState[m+"R"]) side = "L"; // both held: fall back to left
+      else if (sidedState[m+"R"]) side = "R";
+      else side = "L";
+    }
+    out = modWrapName(m, sided, fullNames, side) + "(" + out + ")";
+  }
+  return out;
+}
+
+function aliasFor(mods) {
+  const set = order => order.every(m => mods[m]) && Object.keys(MOD_LABEL).filter(k=>mods[k]).length === order.length;
+  const a = ALIASES.find(a => set(a.mods));
+  return a ? a.name + "(" + current.kc + ")" : null;
+}
+
+function humanCombo(kc, mods, code, rawKey) {
+  const parts = [];
+  for (const m of ["ctrl","shift","alt","gui"]) if (mods[m]) parts.push(MOD_LABEL[m]);
+  parts.push(kc.replace(/^KC_/, ""));
+  return parts.join(" + ") + "  (" + code + ")";
+}
+
+function renderResult() {
+  if (!current) return;
+  const sided = sidedChk.checked;
+  const full = fullNamesChk.checked;
+  const sidedState = sided ? (current.sided || manualToSided()) : null;
+  const chord = buildChord(current.kc, current.mods, sided, sidedState, full);
+  codeOut.textContent = chord;
+  comboLabel.textContent = current.human;
+
+  if (!sided) {
+    const alias = aliasFor(current.mods);
+    if (alias) {
+      aliasLine.hidden = false;
+      aliasLine.innerHTML = "Shorthand alias (identical in VIA): <code>" + alias + "</code>";
+    } else {
+      aliasLine.hidden = true;
+    }
+  } else {
+    aliasLine.hidden = true;
+  }
+  current.code = chord;
+}
+
+function manualToSided() {
+  return {ctrlL:manual.ctrl,ctrlR:false,shiftL:manual.shift,shiftR:false,altL:manual.alt,altR:false,guiL:manual.gui,guiR:false};
+}
+
+function setResult(kc, mods, sidedState, srcLabel) {
+  const parts = [];
+  for (const m of ["ctrl","shift","alt","gui"]) if (mods[m]) parts.push(MOD_LABEL[m]);
+  parts.push(kc.replace(/^KC_/, ""));
+  current = {kc, mods:{...mods}, sided:{...sidedState}, human: parts.join(" + ")};
+  renderResult();
+  resultEl.hidden = false;
+  pushHistory(current.human, codeOut.textContent);
+}
+
+function pushHistory(human, code) {
+  history.unshift({human, code});
+  if (history.length > 15) history.pop();
+  historyWrap.hidden = false;
+  historyList.innerHTML = "";
+  for (const h of history) {
+    const li = document.createElement("li");
+    li.innerHTML =
+      '<span class="h-combo"></span><span class="h-code"></span><button class="ghost">Copy</button>';
+    li.querySelector(".h-combo").textContent = h.human;
+    li.querySelector(".h-code").textContent = h.code;
+    li.querySelector("button").onclick = () => navigator.clipboard.writeText(h.code);
+    historyList.appendChild(li);
+  }
+}
+
+function renderLiveMods() {
+  const m = activeMods();
+  liveModsEl.innerHTML = "";
+  for (const k of ["ctrl","shift","alt","gui"]) {
+    const el = document.createElement("span");
+    el.className = "mod-pill" + (m[k] ? " on" : "");
+    el.textContent = MOD_LABEL[k];
+    liveModsEl.appendChild(el);
+  }
+}
+
+/* ---------- capture ---------- */
+captureEl.addEventListener("focus", () => {
+  armed = true;
+  captureEl.classList.add("armed");
+  hintEl.innerHTML = "<b>Listening…</b> press your combination";
+});
+captureEl.addEventListener("blur", () => {
+  armed = false;
+  captureEl.classList.remove("armed");
+  hintEl.innerHTML = "<b>Click here</b>, then press your key combination";
+  for (const k in held) held[k] = false;
+  renderLiveMods();
+});
+
+window.addEventListener("keydown", e => {
+  if (!armed) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const modKey = MOD_CODES[e.code];
+  if (modKey) {
+    held[modKey] = true;
+    renderLiveMods();
+    return;
+  }
+
+  const kc = CODE_MAP[e.code];
+  if (!kc) {
+    comboLabel.textContent = "Unmapped key: " + e.code;
+    return;
+  }
+  // Merge DOM modifier flags with tracked sides (covers keys held before focus).
+  const mods = {
+    ctrl:  e.ctrlKey  || held.ctrlL  || held.ctrlR,
+    shift: e.shiftKey || held.shiftL || held.shiftR,
+    alt:   e.altKey   || held.altL   || held.altR,
+    gui:   e.metaKey  || held.guiL   || held.guiR,
+  };
+  setResult(kc, mods, held);
+  for (const k in held) held[k] = false;
+  renderLiveMods();
+}, true);
+
+window.addEventListener("keyup", e => {
+  const modKey = MOD_CODES[e.code];
+  if (modKey) { held[modKey] = false; renderLiveMods(); }
+}, true);
+
+/* ---------- checkboxes ---------- */
+sidedChk.addEventListener("change", renderResult);
+fullNamesChk.addEventListener("change", renderResult);
+
+/* ---------- copy ---------- */
+copyBtn.addEventListener("click", () => {
+  if (!current) return;
+  navigator.clipboard.writeText(codeOut.textContent);
+  copyBtn.textContent = "Copied!";
+  setTimeout(() => copyBtn.textContent = "Copy", 1200);
+});
+
+/* ---------- manual mode ---------- */
+for (const m of ["ctrl","shift","alt","gui"]) {
+  const el = document.createElement("span");
+  el.className = "mod-pill";
+  el.textContent = MOD_LABEL[m];
+  el.onclick = () => { manual[m] = !manual[m]; el.classList.toggle("on", manual[m]); };
+  manualModsEl.appendChild(el);
+}
+
+const GROUPS = {
+  "Letters": "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(c=>"KC_"+c),
+  "Number row": "1234567890".split("").map(c=>"KC_"+c),
+  "Function keys": Array.from({length:24},(_,i)=>"KC_F"+(i+1)),
+  "Editing / Nav": ["KC_BSPC","KC_DEL","KC_ENT","KC_TAB","KC_SPC","KC_ESC","KC_INS","KC_HOME","KC_END","KC_PGUP","KC_PGDN","KC_LEFT","KC_RIGHT","KC_UP","KC_DOWN","KC_CAPS","KC_PSCR","KC_SCRL","KC_PAUS"],
+  "Punctuation": ["KC_GRV","KC_MINS","KC_EQL","KC_LBRC","KC_RBRC","KC_BSLS","KC_SCLN","KC_QUOT","KC_COMM","KC_DOT","KC_SLSH"],
+  "Numpad": ["KC_NUM","KC_KP_0","KC_KP_1","KC_KP_2","KC_KP_3","KC_KP_4","KC_KP_5","KC_KP_6","KC_KP_7","KC_KP_8","KC_KP_9","KC_KP_ENTER","KC_KP_PLUS","KC_KP_MINUS","KC_KP_ASTERISK","KC_KP_SLASH","KC_KP_DOT","KC_KP_COMMA","KC_KP_EQUAL"],
+  "Media / System": ["KC_MUTE","KC_VOLU","KC_VOLD","KC_MPLY","KC_MSTP","KC_MNXT","KC_MPRV","KC_EJCT","KC_PWR","KC_SLEP","KC_WAKE","KC_CALC","KC_MAIL","KC_MSEL","KC_WHOM","KC_WBAK","KC_WFWD","KC_WREF","KC_WSCH","KC_WFAV"],
+  "International": ["KC_NUBS","KC_NUHS","KC_INT1","KC_INT2","KC_INT3","KC_INT4","KC_INT5","KC_KANA","KC_HAEN","KC_HANJ","KC_HENK","KC_MHEN","KC_LANG1","KC_LANG2"],
+};
+for (const [g, keys] of Object.entries(GROUPS)) {
+  const og = document.createElement("optgroup");
+  og.label = g;
+  for (const k of keys) {
+    const o = document.createElement("option");
+    o.value = k; o.textContent = k;
+    og.appendChild(o);
+  }
+  keySelect.appendChild(og);
+}
+
+manualGo.addEventListener("click", () => {
+  setResult(keySelect.value, manual, manualToSided());
+});
+
+renderLiveMods();
+</script>
+</body>
+</html>
