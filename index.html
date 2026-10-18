@@ -91,6 +91,7 @@
     cursor: pointer;
   }
   button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .45; cursor: default; filter: none; }
   button.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; }
   .alias { margin-top: 10px; font-size: 13px; color: var(--dim); }
   .alias code { color: var(--green); font-family: "Cascadia Code", Consolas, monospace; }
@@ -306,6 +307,26 @@ function buildChord(kc, mods, sided, sidedState, fullNames) {
   return out;
 }
 
+/* Extended (consumer/system) keycodes can't be wrapped in QMK modifier
+   chords — VIA's Any field only encodes basic keycodes inside wrappers. */
+const EXTENDED = new Set([
+  "KC_MUTE","KC_VOLU","KC_VOLD","KC_MPLY","KC_MSTP","KC_MNXT","KC_MPRV","KC_EJCT",
+  "KC_PWR","KC_SLEP","KC_WAKE","KC_MAIL","KC_MSEL","KC_CALC",
+  "KC_WHOM","KC_WBAK","KC_WFWD","KC_WREF","KC_WSCH","KC_WFAV",
+]);
+
+function hasMods(mods) {
+  return mods.ctrl || mods.shift || mods.alt || mods.gui;
+}
+
+// Chord for display/copy, or a warning when the combo can't be encoded.
+function displayChord(kc, mods, sided, sidedState, fullNames) {
+  if (hasMods(mods) && EXTENDED.has(kc)) {
+    return "N/A — " + kc + " can't be combined with modifiers (VIA's Any field only wraps basic keycodes)";
+  }
+  return buildChord(kc, mods, sided, sidedState, fullNames);
+}
+
 function aliasFor(mods) {
   const set = order => order.every(m => mods[m]) && Object.keys(MOD_LABEL).filter(k=>mods[k]).length === order.length;
   const a = ALIASES.find(a => set(a.mods));
@@ -324,11 +345,13 @@ function renderResult() {
   const sided = sidedChk.checked;
   const full = fullNamesChk.checked;
   const sidedState = sided ? (current.sided || manualToSided()) : null;
-  const chord = buildChord(current.kc, current.mods, sided, sidedState, full);
+  const chord = displayChord(current.kc, current.mods, sided, sidedState, full);
   codeOut.textContent = chord;
   comboLabel.textContent = current.human;
+  const wrapOk = !(hasMods(current.mods) && EXTENDED.has(current.kc));
+  copyBtn.disabled = !wrapOk;
 
-  if (!sided) {
+  if (!sided && wrapOk) {
     const alias = aliasFor(current.mods);
     if (alias) {
       aliasLine.hidden = false;
@@ -353,21 +376,26 @@ function setResult(kc, mods, sidedState, srcLabel) {
   current = {kc, mods:{...mods}, sided:{...sidedState}, human: parts.join(" + ")};
   renderResult();
   resultEl.hidden = false;
-  pushHistory(current.human, codeOut.textContent);
+  pushHistory({human: current.human, kc: current.kc, mods: current.mods, sided: current.sided});
 }
 
-function pushHistory(human, code) {
-  history.unshift({human, code});
+function pushHistory(entry) {
+  history.unshift(entry);
   if (history.length > 15) history.pop();
   historyWrap.hidden = false;
+  renderHistory();
+}
+
+function renderHistory() {
   historyList.innerHTML = "";
   for (const h of history) {
+    const code = displayChord(h.kc, h.mods, sidedChk.checked, h.sided, fullNamesChk.checked);
     const li = document.createElement("li");
     li.innerHTML =
       '<span class="h-combo"></span><span class="h-code"></span><button class="ghost">Copy</button>';
     li.querySelector(".h-combo").textContent = h.human;
-    li.querySelector(".h-code").textContent = h.code;
-    li.querySelector("button").onclick = () => navigator.clipboard.writeText(h.code);
+    li.querySelector(".h-code").textContent = code;
+    li.querySelector("button").onclick = () => navigator.clipboard.writeText(code);
     historyList.appendChild(li);
   }
 }
@@ -409,6 +437,8 @@ window.addEventListener("keydown", e => {
     return;
   }
 
+  if (e.repeat) return;
+
   const kc = CODE_MAP[e.code];
   if (!kc) {
     current = null;
@@ -426,7 +456,7 @@ window.addEventListener("keydown", e => {
     gui:   e.metaKey  || held.guiL   || held.guiR,
   };
   setResult(kc, mods, held);
-  for (const k in held) held[k] = false;
+  // Keep `held` — modifiers may still be physically down; keyup/blur clears it.
   renderLiveMods();
 }, true);
 
@@ -436,12 +466,12 @@ window.addEventListener("keyup", e => {
 }, true);
 
 /* ---------- checkboxes ---------- */
-sidedChk.addEventListener("change", renderResult);
-fullNamesChk.addEventListener("change", renderResult);
+sidedChk.addEventListener("change", () => { renderResult(); renderHistory(); });
+fullNamesChk.addEventListener("change", () => { renderResult(); renderHistory(); });
 
 /* ---------- copy ---------- */
 copyBtn.addEventListener("click", () => {
-  if (!current) return;
+  if (!current || copyBtn.disabled) return;
   navigator.clipboard.writeText(codeOut.textContent);
   copyBtn.textContent = "Copied!";
   setTimeout(() => copyBtn.textContent = "Copy", 1200);
