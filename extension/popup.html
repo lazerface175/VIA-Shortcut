@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VIA Keycode Finder</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1d26;
+    --border: #2a2f3e;
+    --text: #e8eaf0;
+    --dim: #9aa0b4;
+    --accent: #6ea8fe;
+    --accent-dim: #2d4a77;
+    --green: #4ade80;
+    --code-bg: #11141b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    width: 400px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { width: 100%; padding: 14px; }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 12px; }
+  .sub a { color: var(--accent); }
+
+  .capture {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 22px 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    user-select: none;
+    outline: none;
+  }
+  .capture:focus, .capture.armed { border-color: var(--accent); background: rgba(110,168,254,.06); }
+  .capture .hint { font-size: 13px; color: var(--dim); }
+  .capture .hint b { color: var(--text); font-weight: 600; }
+  .capture .live-mods { margin-top: 10px; min-height: 26px; }
+  .mod-pill {
+    display: inline-block;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 3px 9px;
+    margin: 0 3px;
+    font-size: 12px;
+    color: var(--dim);
+    background: var(--panel);
+  }
+  .mod-pill.on { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+
+  .result {
+    margin-top: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .result .combo { color: var(--dim); font-size: 12px; margin-bottom: 6px; }
+  .code-row { display: flex; gap: 8px; align-items: stretch; }
+  .code {
+    flex: 1;
+    font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-size: 15px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 9px 12px;
+    color: var(--green);
+    word-break: break-all;
+    display: flex;
+    align-items: center;
+  }
+  button {
+    background: var(--accent);
+    color: #0b1220;
+    border: none;
+    border-radius: 7px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .45; cursor: default; filter: none; }
+  button.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 4px 10px; font-size: 12px; }
+  .alias { margin-top: 8px; font-size: 12px; color: var(--dim); }
+  .alias code { color: var(--green); font-family: "Cascadia Code", Consolas, monospace; }
+
+  .toolbar { display: flex; gap: 12px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .toolbar label { font-size: 12px; color: var(--dim); display: flex; gap: 5px; align-items: center; }
+
+  details.manual {
+    margin-top: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  details.manual summary {
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+  }
+  .manual p { font-size: 12px; color: var(--dim); margin: 8px 0 10px; }
+  .manual-mods { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .manual-mods .mod-pill { cursor: pointer; }
+  .manual-row { display: flex; gap: 8px; }
+  select {
+    flex: 1;
+    min-width: 0;
+    background: var(--code-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px;
+    font-size: 12px;
+  }
+
+  .history { margin-top: 14px; }
+  .history h2 { font-size: 13px; margin: 0 0 8px; }
+  .history ul { list-style: none; margin: 0; padding: 0; }
+  .history li {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 7px; padding: 6px 10px; margin-bottom: 5px;
+  }
+  .history .h-combo { color: var(--dim); font-size: 11px; width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history .h-code { flex: 1; font-family: Consolas, monospace; font-size: 12px; color: var(--green); overflow: hidden; text-overflow: ellipsis; }
+  .note { font-size: 11px; color: var(--dim); margin-top: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>VIA Keycode Finder</h1>
+  <div class="sub">Press a combo &rarr; QMK string for <a href="https://usevia.app" target="_blank" rel="noopener">usevia.app</a> &gt; <b>Special &gt; Any</b></div>
+
+  <div id="capture" class="capture" tabindex="0">
+    <div class="hint" id="hint"><b>Listening&hellip;</b> press your combination</div>
+    <div class="live-mods" id="liveMods"></div>
+  </div>
+
+  <div class="result" id="result" hidden>
+    <div class="combo" id="comboLabel"></div>
+    <div class="code-row">
+      <div class="code" id="codeOut"></div>
+      <button id="copyBtn">Copy</button>
+    </div>
+    <div class="alias" id="aliasLine" hidden></div>
+    <div class="toolbar">
+      <label><input type="checkbox" id="sidedMods"> Left/right mods</label>
+      <label><input type="checkbox" id="fullNames"> Full mod names</label>
+    </div>
+  </div>
+
+  <details class="manual">
+    <summary>OS-reserved shortcut? Pick it manually</summary>
+    <p>Combos the browser never sees (Win+D, Ctrl+Alt+Del, Ctrl+W&hellip;). Toggle modifiers and pick the key.</p>
+    <div class="manual-mods" id="manualMods"></div>
+    <div class="manual-row">
+      <select id="keySelect"></select>
+      <button id="manualGo">Generate</button>
+    </div>
+  </details>
+
+  <div class="history" id="historyWrap" hidden>
+    <h2>History</h2>
+    <ul id="historyList"></ul>
+  </div>
+
+  <div class="note">
+    GUI = Win / Cmd &middot; Alt = Option &middot; AltGr registers as Ctrl+Alt.<br>
+    Browser-reserved chords (Ctrl+W, Ctrl+T, F12&hellip;) can't be captured &mdash; use the manual picker.
+  </div>
+</main>
+
+<script src="qmk.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
